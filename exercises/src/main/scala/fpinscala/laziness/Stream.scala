@@ -35,10 +35,8 @@ trait Stream[+A] {
  
 
   def drop(n: Int): Stream[A] = this match {
-    case Empty => empty // exception if n>0?
-    case Cons(_,t)  => if (n==0){ this } else {
-      t().drop(n-1)
-    }
+    case Cons(_, t) if n > 0 => t().drop(n-1)
+    case _ => this
   }
 
   def takeWhile(p: A => Boolean): Stream[A] = this match {
@@ -51,10 +49,11 @@ trait Stream[+A] {
     case _ => true
   }
 
-  def takeWhileFR(p: A => Boolean): Stream[A] = this.foldRight(empty[A])((h, t) => if (p(h)){cons(h,t)} else empty)
+  def takeWhileFR(p: A => Boolean): Stream[A] = 
+    this.foldRight(empty[A])((h, t) => if (p(h)) cons(h,t) else empty)
 
 
-  def headOption: Option[A] = this.foldRight(None: Option[A])((h,_)=>Some(h))
+  def headOption: Option[A] = this.foldRight(None: Option[A])((h,_)=> Some(h))
 
   // 5.7 map, filter, append, flatmap using foldRight. Part of the exercise is
   // writing your own function signatures.
@@ -82,6 +81,45 @@ trait Stream[+A] {
         case _ => None
       }
   }
+
+  def zipWith[B, C](s: Stream[B], f: (A, B)=> C): Stream[C] = unfold[C, (Stream[A], Stream[B])]((this, s)){
+      case (Cons(h1,t1), Cons(h2,t2)) => Some((f(h1(),h2()), (t1(),t2())))
+      case _ => None
+    }
+
+  def zipAll[B](s2: Stream[B]): Stream[(Option[A],Option[B])] 
+  = unfold[(Option[A], Option[B]), (Stream[A], Stream[B])] ((this, s2)) {
+    case (Empty, Empty) => None
+    case _ @p =>
+      val s1 = p._1 match {
+        case Cons(h, t) => (Some(h()), t())
+        case _ => (None, p._1)
+      }
+      val s2 = p._2 match {
+        case Cons(h, t) => (Some(h()), t())
+        case _ => (None, p._2)
+      }
+      Some((s1._1, s2._1), (s1._2, s2._2))
+  }
+  
+  def startsWith[B](s: Stream[B]): Boolean = this.zipAll[B](s).foldRight(true)(
+    (e, state) => e match {
+      case (Some(e1), Some(e2)) if e1==e2 => state
+      case (Some(_), None) => true
+      case _ => false
+    }
+  )
+  
+ 
+  def hasSubsequence[B>:A](s: Stream[B]): Boolean = tails exists( _ startsWith s)
+
+  def scanRight[B](z: B)(f: (A, => B) => B): Stream[B] = 
+    this match {
+      case Cons(h,t) =>
+        val tail = t().scanRight(z)(f)
+        cons[B](f(h(), tail.headOption.get), tail)
+      case _ => Stream(z)
+    }
 
   def takeWhileViaUnfold(f: A => Boolean): Stream[A] = unfold[A,Stream[A]] (this){
       case Cons(h,t) if f(h())=> Some(h(), t())
