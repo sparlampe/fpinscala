@@ -2,7 +2,6 @@ package fpinscala.laziness
 
 import Stream._
 
-import scala.runtime.Nothing$
 trait Stream[+A] {
 
   def foldRight[B](z: => B)(f: (A, => B) => B): B = // The arrow `=>` in front of the argument type `B` means that the function `f` takes its second argument by name and may choose not to evaluate it.
@@ -33,9 +32,13 @@ trait Stream[+A] {
     case _ => empty
   }
 
+ 
+
   def drop(n: Int): Stream[A] = this match {
-    case Cons(_, t) if n > 0 => t().drop(n-1)
-    case _ => this
+    case Empty => empty // exception if n>0?
+    case Cons(_,t)  => if (n==0){ this } else {
+      t().drop(n-1)
+    }
   }
 
   def takeWhile(p: A => Boolean): Stream[A] = this match {
@@ -48,11 +51,10 @@ trait Stream[+A] {
     case _ => true
   }
 
-  def takeWhileFR(p: A => Boolean): Stream[A] = 
-    this.foldRight(empty[A])((h, t) => if (p(h)) cons(h,t) else empty)
+  def takeWhileFR(p: A => Boolean): Stream[A] = this.foldRight(empty[A])((h, t) => if (p(h)){cons(h,t)} else empty)
 
 
-  def headOption: Option[A] = this.foldRight(None: Option[A])((h,_)=> Some(h))
+  def headOption: Option[A] = this.foldRight(None: Option[A])((h,_)=>Some(h))
 
   // 5.7 map, filter, append, flatmap using foldRight. Part of the exercise is
   // writing your own function signatures.
